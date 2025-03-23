@@ -12,3 +12,4 @@ tiktoken
 openpyxl
 python-pptx
 reportlab
+langchain_community
