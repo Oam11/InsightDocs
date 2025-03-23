@@ -51,9 +51,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Create a `.env` file in the project root and add your Groq API key:
-```
-GROQ_API_KEY=your_api_key_here
+4. Create a `.streamlit/secrets.toml` file in your project directory:
+```toml
+GROQ_API_KEY = "your_api_key_here"
 ```
 
 ## Usage
@@ -111,8 +111,9 @@ streamlit run app.py
 If you encounter any issues:
 
 1. **API Key Issues**:
-   - Ensure your API key is correctly set in the `.env` file
+   - Ensure your API key is correctly set in the `.streamlit/secrets.toml` file
    - Verify the API key has the necessary permissions
+   - Make sure the `.streamlit` directory exists in your project root
 
 2. **File Processing Issues**:
    - Check if the file type is supported

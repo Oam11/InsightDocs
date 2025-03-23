@@ -1,16 +1,56 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv
 from utils import DocumentProcessor
 import tempfile
 import uuid
 from datetime import datetime
 
-# Load environment variables
-load_dotenv()
+# Get API key from Streamlit secrets
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+    if not api_key or api_key == "your_api_key_here":
+        st.error("""
+        Please set your actual Groq API key in `.streamlit/secrets.toml`. 
+        The current value is either empty or still using the placeholder.
+        
+        1. Go to https://console.groq.com to get your API key
+        2. Open `.streamlit/secrets.toml`
+        3. Replace the placeholder with your actual API key:
+        ```toml
+        GROQ_API_KEY = "your_actual_groq_api_key_here"
+        ```
+        """)
+        st.stop()
+except FileNotFoundError:
+    st.error("""
+    No secrets.toml file found. Please create a `.streamlit/secrets.toml` file in your project directory with your Groq API key:
+    
+    ```toml
+    GROQ_API_KEY = "your_actual_groq_api_key_here"
+    ```
+    
+    You can get your API key from https://console.groq.com
+    """)
+    st.stop()
+except KeyError:
+    st.error("""
+    GROQ_API_KEY not found in secrets.toml. Please add your Groq API key to the `.streamlit/secrets.toml` file:
+    
+    ```toml
+    GROQ_API_KEY = "your_actual_groq_api_key_here"
+    ```
+    
+    You can get your API key from https://console.groq.com
+    """)
+    st.stop()
 
-# Get API key
-api_key = os.getenv("GROQ_API_KEY")
+# Add basic API key validation
+if not api_key.startswith("gsk_"):
+    st.error("""
+    Invalid Groq API key format. The API key should start with 'gsk_'.
+    Please check your API key in `.streamlit/secrets.toml` and make sure you're using the correct key from https://console.groq.com
+    """)
+    st.stop()
 
 # Initialize session state
 if 'session_id' not in st.session_state:

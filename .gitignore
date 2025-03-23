@@ -1,5 +1,5 @@
-# Environment variables
-.env
+# Streamlit secrets
+.streamlit/secrets.toml
 
 # Python
 __pycache__/
@@ -7,15 +7,54 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
 venv/
 ENV/
+env/
+.env
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# OS
 .DS_Store
-Thumbs.db 
+
+# Project specific
+*.pdf
+temp/
+*.faiss
+*.pkl
+
+# Logs
+*.log
+logs/
+log/
+
+# Local development
+.python-version
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+*.tmp
+.temp/
+tmp/
