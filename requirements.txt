@@ -13,3 +13,4 @@ openpyxl
 python-pptx
 reportlab
 langchain_community
+xlrd
