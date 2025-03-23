@@ -1,25 +1,40 @@
-# Document Chat with Gemini
+# Document Chat with Groq
 
-A Streamlit application that allows you to chat with your documents using Google's Gemini AI. This application implements a RAG (Retrieval Augmented Generation) model to provide accurate answers based on your document content.
+A Streamlit application that allows you to chat with your documents using Groq's Gemma2 model. This application implements a Retrieval Augmented Generation (RAG) model to provide accurate and context-aware responses based on your document content.
 
 ## Features
 
-- Support for multiple file types (PDF, DOCX, TXT, CSV, JSON, XML, YAML, Excel, PowerPoint, HTML)
-- Batch processing of documents
-- Token limit management
-- Interactive chat interface
-- Secure API key handling using environment variables
-- Automatic file type detection
-- Efficient text chunking and retrieval
+- **Multi-Document Support**: Upload and process multiple documents simultaneously
+- **Session Management**: Each chat session is unique with a session ID
+- **PDF Export**: Download your entire Q&A session as a PDF
+- **Wide File Format Support**: Process various document types including:
+  - PDF documents
+  - Word documents (DOCX)
+  - Text files (TXT)
+  - Spreadsheets (CSV, XLS, XLSX)
+  - JSON data
+  - XML documents
+  - YAML files
+  - PowerPoint presentations (PPTX)
+  - HTML documents
+- **Smart Document Processing**:
+  - Automatic content type detection
+  - Document-specific context preservation
+  - Improved chunking for better context understanding
+- **Enhanced Q&A Experience**:
+  - Powered by Groq's Gemma2 model
+  - Context-aware responses
+  - Document source tracking
+  - Timestamp for each Q&A pair
 
 ## Prerequisites
 
 - Python 3.8 or higher
-- Google Gemini API key
+- Groq API key
 
 ## Installation
 
-1. Clone this repository:
+1. Clone the repository:
 ```bash
 git clone https://github.com/yourusername/Chat-with-documents.git
 cd Chat-with-documents
@@ -28,95 +43,68 @@ cd Chat-with-documents
 2. Create and activate a virtual environment:
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Install the required packages:
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Create a `.env` file in the project root directory and add your Gemini API key:
-```bash
-GEMINI_API_KEY=your_api_key_here
+4. Create a `.env` file in the project root and add your Groq API key:
+```
+GROQ_API_KEY=your_api_key_here
 ```
 
 ## Usage
 
-1. Start the Streamlit application:
+1. Start the application:
 ```bash
 streamlit run app.py
 ```
 
-2. Open your web browser and navigate to the URL shown in the terminal (typically http://localhost:8501)
-
-3. Upload your documents using the file uploader in the sidebar
-
-4. Click "Process Documents" to analyze your documents
-
-5. Start asking questions about your documents in the chat interface
-
-## Supported File Types
-
-### Text Documents
-- Text files (.txt)
-- PDF files (.pdf)
-- Microsoft Word documents (.docx)
-- HTML files (.html)
-
-### Spreadsheets
-- CSV files (.csv)
-- Excel files (.xls, .xlsx)
-
-### Data Files
-- JSON files (.json)
-- XML files (.xml)
-- YAML files (.yml, .yaml)
-
-### Presentations
-- PowerPoint files (.pptx)
-
-### Additional Features
-- Automatic file type detection using MIME types
-- Fallback to text reading for unknown file types
-- Structured data extraction from various formats
-- Preserved formatting where applicable
+2. Upload your documents using the file uploader in the sidebar
+3. Click "Process Documents" to analyze the content
+4. Start asking questions about your documents
+5. Download the Q&A session as PDF when needed
 
 ## How It Works
 
 1. **Document Processing**:
-   - The application processes your documents and splits them into manageable chunks
-   - Each file type is handled with its specific parser to extract text content
-   - Documents are processed in batches to manage token limits
+   - Documents are read and processed based on their file type
+   - Content is split into chunks for efficient processing
+   - Each chunk maintains context about its source document
+   - Documents are indexed using FAISS for fast retrieval
 
-2. **Embedding Generation**:
-   - Creates embeddings for each chunk using Google's Generative AI
-   - Uses the embedding-001 model for efficient vector representation
+2. **Question Answering**:
+   - Questions are processed using Groq's Gemma2 model
+   - Relevant document chunks are retrieved using semantic search
+   - The model generates answers based on the retrieved context
+   - Each Q&A pair is stored with timestamps
 
-3. **Vector Storage**:
-   - The chunks are stored in a FAISS vector database for efficient retrieval
-   - FAISS enables fast similarity search across document chunks
+3. **Session Management**:
+   - Each chat session has a unique ID
+   - Q&A history is maintained throughout the session
+   - Session data can be exported as PDF
 
-4. **Question Answering**:
-   - When you ask a question, the system:
-     - Retrieves the most relevant document chunks
-     - Uses Gemini AI to generate a response based on the retrieved context
-   - The RAG model ensures responses are grounded in your document content
+4. **PDF Export**:
+   - Generate a PDF containing all Q&A pairs
+   - Includes timestamps and document sources
+   - Nicely formatted with clear question-answer separation
 
-## Security
+## Technical Details
 
-- API key is stored securely in environment variables
-- All processing is done locally
-- Documents are processed in temporary storage
-- The `.env` file should be added to `.gitignore` to prevent accidental commits
-- No document content is stored permanently
+- **Model**: Groq's Gemma2 model for natural language understanding
+- **Vector Store**: FAISS for efficient similarity search
+- **Embeddings**: Sentence Transformers for document chunk representation
+- **PDF Generation**: ReportLab for PDF creation and formatting
 
 ## Performance Considerations
 
-- Documents are processed in chunks to manage token limits
-- Text splitting is optimized for context preservation
-- Vector search is efficient using FAISS
-- Batch processing for multiple documents
+- The Gemma2 model provides fast inference times
+- Document chunking optimizes context window usage
+- FAISS enables efficient similarity search
+- Session state management ensures smooth user experience
 
 ## Troubleshooting
 
@@ -132,7 +120,7 @@ If you encounter any issues:
    - Verify file encoding (UTF-8 recommended)
 
 3. **Model Errors**:
-   - Ensure you're using a compatible version of the Gemini API
+   - Ensure you're using a compatible version of the Groq API
    - Check your internet connection
 
 ## Contributing

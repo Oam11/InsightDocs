@@ -19,6 +19,11 @@ import openpyxl
 import pptx
 import html
 import re
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from datetime import datetime
 
 class DocumentProcessor:
     def __init__(self, api_key: str):
@@ -30,7 +35,76 @@ class DocumentProcessor:
             length_function=len,
             separators=["\n\n", "\n", " ", ""]
         )
+        self.qa_history = []
         
+    def add_qa_to_history(self, question: str, answer: str):
+        """Add a Q&A pair to the history."""
+        self.qa_history.append({
+            'question': question,
+            'answer': answer,
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    
+    def generate_qa_pdf(self, output_path: str):
+        """Generate a PDF containing the Q&A history."""
+        doc = SimpleDocTemplate(output_path, pagesize=letter)
+        styles = getSampleStyleSheet()
+        elements = []
+        
+        # Title
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            spaceAfter=30
+        )
+        elements.append(Paragraph("Document Q&A Session", title_style))
+        
+        # Session info
+        session_style = ParagraphStyle(
+            'SessionInfo',
+            parent=styles['Normal'],
+            fontSize=12,
+            textColor=colors.gray
+        )
+        elements.append(Paragraph(f"Session Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", session_style))
+        elements.append(Spacer(1, 20))
+        
+        # Q&A pairs
+        for qa in self.qa_history:
+            # Question
+            question_style = ParagraphStyle(
+                'Question',
+                parent=styles['Heading2'],
+                fontSize=14,
+                textColor=colors.blue,
+                spaceAfter=10
+            )
+            elements.append(Paragraph(f"Q: {qa['question']}", question_style))
+            
+            # Answer
+            answer_style = ParagraphStyle(
+                'Answer',
+                parent=styles['Normal'],
+                fontSize=12,
+                spaceAfter=20
+            )
+            elements.append(Paragraph(f"A: {qa['answer']}", answer_style))
+            
+            # Timestamp
+            timestamp_style = ParagraphStyle(
+                'Timestamp',
+                parent=styles['Italic'],
+                fontSize=8,
+                textColor=colors.gray
+            )
+            elements.append(Paragraph(f"Asked at: {qa['timestamp']}", timestamp_style))
+            elements.append(Spacer(1, 20))
+        
+        # Build PDF
+        doc.build(elements)
+        return output_path
+    
     def read_file(self, file_path: str) -> str:
         """Read different file types and return their content as text."""
         mime = magic.Magic(mime=True)
@@ -141,36 +215,73 @@ class DocumentProcessor:
             return text
     
     def process_documents(self, file_paths: List[str]) -> FAISS:
-        """Process multiple documents and create a FAISS vector store."""
-        all_texts = []
+        """Process multiple documents and create a vector store."""
+        all_chunks = []
+        
         for file_path in file_paths:
             try:
-                text = self.read_file(file_path)
-                all_texts.append(text)
+                # Read the file content
+                content = self.read_file(file_path)
+                
+                # Split content into chunks
+                chunks = self.text_splitter.split_text(content)
+                
+                # Add file name and content type to each chunk for context
+                file_name = os.path.basename(file_path)
+                file_extension = os.path.splitext(file_path)[1].lower()
+                content_type = self._get_content_type(file_extension)
+                
+                chunks = [f"[Document: {file_name} | Type: {content_type}]\n{chunk}" for chunk in chunks]
+                
+                all_chunks.extend(chunks)
+                
             except Exception as e:
                 print(f"Error processing {file_path}: {str(e)}")
+                continue
         
-        # Split texts into chunks
-        chunks = []
-        for text in all_texts:
-            chunks.extend(self.text_splitter.split_text(text))
+        if not all_chunks:
+            raise ValueError("No text content could be extracted from any of the uploaded files. Please check if the files contain readable text.")
         
-        # Create vector store
-        vector_store = FAISS.from_texts(chunks, self.embeddings)
+        # Create vector store with increased number of retrieved documents
+        vector_store = FAISS.from_texts(all_chunks, self.embeddings)
         return vector_store
+    
+    def _get_content_type(self, file_extension: str) -> str:
+        """Get a human-readable content type based on file extension."""
+        content_types = {
+            '.pdf': 'PDF Document',
+            '.docx': 'Word Document',
+            '.txt': 'Text File',
+            '.csv': 'CSV Spreadsheet',
+            '.json': 'JSON Data',
+            '.xml': 'XML Document',
+            '.yml': 'YAML File',
+            '.yaml': 'YAML File',
+            '.xls': 'Excel Spreadsheet',
+            '.xlsx': 'Excel Spreadsheet',
+            '.pptx': 'PowerPoint Presentation',
+            '.html': 'HTML Document'
+        }
+        return content_types.get(file_extension, 'Unknown Type')
     
     def create_qa_chain(self, vector_store: FAISS) -> RetrievalQA:
         """Create a question-answering chain using the vector store."""
         llm = ChatGroq(
             groq_api_key=self.api_key,
-            model_name="mixtral-8x7b-32768",
+            model_name="gemma2-9b-it",
             temperature=0.7,
-            max_tokens=32768
+            max_tokens=4096
         )
         
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
-            retriever=vector_store.as_retriever(search_kwargs={"k": 3})
+            retriever=vector_store.as_retriever(
+                search_kwargs={
+                    "k": 5,  # Increased number of retrieved documents
+                    "fetch_k": 10,  # Fetch more documents for better context
+                    "lambda_mult": 0.5  # Balance between relevance and diversity
+                }
+            )
         )
         return qa_chain 
