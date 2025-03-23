@@ -1,0 +1,17 @@
+streamlit==1.32.0
+python-dotenv==1.0.1
+langchain==0.1.12
+langchain-community==0.0.27
+python-magic-bin==0.4.14
+PyPDF2==3.0.1
+python-docx>=0.8.11
+pandas==2.2.1
+numpy==1.26.4
+tiktoken==0.6.0
+faiss-cpu==1.7.4
+xlrd==2.0.1
+openpyxl==3.1.2
+python-pptx==0.6.23
+PyYAML==6.0.1
+groq==0.4.2
+langchain-groq==0.0.5
