@@ -76,8 +76,9 @@ import nltk
 from rank_bm25 import BM25Okapi
 
 class EnhancedDocumentProcessor:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model_name: str = "llama-3.3-70b-versatile"):
         self.api_key = api_key
+        self.model_name = model_name
         self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={'device': 'cpu'}
@@ -568,7 +569,7 @@ Troubleshooting Tips:
         """Create an enhanced question-answering chain using ensemble retrieval."""
         llm = ChatGroq(
             groq_api_key=self.api_key,
-            model_name="gemma2-9b-it",
+            model_name=self.model_name,
             temperature=0.3,  # Lower temperature for more focused answers
             max_tokens=1024  # Adjusted to stay within model limits
         )

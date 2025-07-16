@@ -64,6 +64,9 @@ def clear_stored_api_key():
 stored_api_key = load_api_key()
 api_key = None
 
+# Default model selection (can be overridden in sidebar)
+default_model = "llama-3.3-70b-versatile"
+
 # Try to use stored API key first
 if stored_api_key and stored_api_key.startswith("gsk_"):
     api_key = stored_api_key
@@ -119,14 +122,8 @@ if 'session_id' not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 if 'current_api_key' not in st.session_state:
     st.session_state.current_api_key = None
-if 'doc_processor' not in st.session_state or st.session_state.current_api_key != api_key:
-    st.session_state.doc_processor = DocumentProcessor(api_key)
-    st.session_state.current_api_key = api_key
-    # Reset processing state when API key changes
-    if 'current_api_key' in st.session_state and st.session_state.current_api_key != api_key:
-        st.session_state.processed_docs = False
-        st.session_state.document_store = None
-        st.session_state.qa_history = []
+if 'current_model' not in st.session_state:
+    st.session_state.current_model = default_model
 if 'qa_history' not in st.session_state:
     st.session_state.qa_history = []
 if 'processed_docs' not in st.session_state:
@@ -179,6 +176,29 @@ with st.sidebar:
                     st.error("❌ Failed to clear stored key")
     else:
         st.error("❌ No API key provided")
+    
+    st.markdown("---")
+    
+    # Model Selection
+    st.header("🤖 Model Configuration")
+    model_options = {
+        "Llama 3.3 70B (Recommended)": "llama-3.3-70b-versatile",
+        "Llama 3.1 70B": "llama-3.1-70b-versatile", 
+        "Llama 3.1 8B": "llama-3.1-8b-instant",
+        "Llama 3.2 90B": "llama-3.2-90b-text-preview",
+        "Llama 3.2 11B": "llama-3.2-11b-text-preview",
+        "Llama 3.2 3B": "llama-3.2-3b-preview",
+        "Llama 3.2 1B": "llama-3.2-1b-preview"
+    }
+    
+    selected_model_name = st.selectbox(
+        "Choose AI Model:",
+        options=list(model_options.keys()),
+        index=0,
+        help="Select the language model for document analysis. Larger models generally provide better responses but may be slower."
+    )
+    
+    selected_model = model_options[selected_model_name]
     
     st.markdown("---")
     st.header("📁 Upload Documents & Images")
@@ -314,6 +334,24 @@ with st.sidebar:
                     st.error(f"❌ Error generating PDF: {str(e)}")
     else:
         st.info("💡 Ask some questions first to generate a Q&A PDF report")
+
+# Initialize or update DocumentProcessor based on selected model and API key
+need_reinit = (
+    'doc_processor' not in st.session_state or 
+    st.session_state.current_api_key != api_key or
+    st.session_state.current_model != selected_model
+)
+
+if need_reinit:
+    st.session_state.doc_processor = DocumentProcessor(api_key, selected_model)
+    st.session_state.current_api_key = api_key
+    st.session_state.current_model = selected_model
+    # Reset processing state when API key or model changes
+    if ('current_api_key' in st.session_state and st.session_state.current_api_key != api_key) or \
+       ('current_model' in st.session_state and st.session_state.current_model != selected_model):
+        st.session_state.processed_docs = False
+        st.session_state.document_store = None
+        st.session_state.qa_history = []
 
 # Main chat interface
 if not st.session_state.processed_docs:
