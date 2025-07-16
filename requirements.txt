@@ -1,6 +1,7 @@
 streamlit
 langchain
 langchain-groq
+langchain-huggingface
 groq
 faiss-cpu
 sentence-transformers
@@ -14,3 +15,19 @@ python-pptx
 reportlab
 langchain_community
 xlrd
+# Image processing dependencies
+Pillow
+easyocr
+pytesseract
+opencv-python
+# Enhanced RAG dependencies
+chromadb
+rank_bm25
+# Better text processing
+spacy
+nltk
+# Document parsing improvements
+pdfplumber
+pymupdf
+# Async support
+aiofiles

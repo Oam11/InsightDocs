@@ -5,110 +5,165 @@ import tempfile
 import uuid
 from datetime import datetime
 
-# Get API key from Streamlit secrets
-try:
-    api_key = st.secrets["GROQ_API_KEY"]
-    if not api_key or api_key == "your_api_key_here":
-        st.error("""
-        Please set your actual Groq API key in `.streamlit/secrets.toml`. 
-        The current value is either empty or still using the placeholder.
-        
-        1. Go to https://console.groq.com to get your API key
-        2. Open `.streamlit/secrets.toml`
-        3. Replace the placeholder with your actual API key:
-        ```toml
-        GROQ_API_KEY = "your_actual_groq_api_key_here"
-        ```
-        """)
-        st.stop()
-except FileNotFoundError:
-    st.error("""
-    No secrets.toml file found. Please create a `.streamlit/secrets.toml` file in your project directory with your Groq API key:
-    
-    ```toml
-    GROQ_API_KEY = "your_actual_groq_api_key_here"
-    ```
-    
-    You can get your API key from https://console.groq.com
-    """)
-    st.stop()
-except KeyError:
-    st.error("""
-    GROQ_API_KEY not found in secrets.toml. Please add your Groq API key to the `.streamlit/secrets.toml` file:
-    
-    ```toml
-    GROQ_API_KEY = "your_actual_groq_api_key_here"
-    ```
-    
-    You can get your API key from https://console.groq.com
+# Get API key from user input only
+api_key = None
+
+st.markdown("### 🔑 Enter Your Groq API Key")
+st.info("Get your free API key at [console.groq.com](https://console.groq.com)")
+
+api_key = st.text_input(
+    "Groq API Key:",
+    type="password",
+    placeholder="Enter your Groq API key (starts with 'gsk_')",
+    help="Your API key is stored only for this session and is not saved anywhere.",
+    key="api_key_input"
+)
+
+if not api_key:
+    st.warning("⚠️ Please enter your Groq API key to continue.")
+    st.markdown("""
+    **How to get your API key:**
+    1. Go to [console.groq.com](https://console.groq.com)
+    2. Sign up for a free account
+    3. Generate an API key
+    4. Copy and paste it above
     """)
     st.stop()
 
-# Add basic API key validation
+# Validate API key format
 if not api_key.startswith("gsk_"):
     st.error("""
-    Invalid Groq API key format. The API key should start with 'gsk_'.
-    Please check your API key in `.streamlit/secrets.toml` and make sure you're using the correct key from https://console.groq.com
+    ❌ Invalid Groq API key format. The API key should start with 'gsk_'.
+    
+    Please check your API key and make sure you're using the correct key from [console.groq.com](https://console.groq.com)
     """)
     st.stop()
 
 # Initialize session state
 if 'session_id' not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
-if 'doc_processor' not in st.session_state:
+if 'current_api_key' not in st.session_state:
+    st.session_state.current_api_key = None
+if 'doc_processor' not in st.session_state or st.session_state.current_api_key != api_key:
     st.session_state.doc_processor = DocumentProcessor(api_key)
+    st.session_state.current_api_key = api_key
+    # Reset processing state when API key changes
+    if 'current_api_key' in st.session_state and st.session_state.current_api_key != api_key:
+        st.session_state.processed_docs = False
+        st.session_state.document_store = None
+        st.session_state.qa_history = []
 if 'qa_history' not in st.session_state:
     st.session_state.qa_history = []
 if 'processed_docs' not in st.session_state:
     st.session_state.processed_docs = False
-if 'vector_store' not in st.session_state:
-    st.session_state.vector_store = None
+if 'document_store' not in st.session_state:
+    st.session_state.document_store = None
 if 'last_question' not in st.session_state:
     st.session_state.last_question = ""
 
 # Set page config
 st.set_page_config(
-    page_title="Document Chat with Groq",
+    page_title="InsightDocs - Multi-Format RAG",
     page_icon="📚",
     layout="wide"
 )
 
 # Title and description
-st.title("Document Chat with Groq")
+st.title("📚 InsightDocs - Multi-Format RAG Application")
 st.markdown("""
-This application allows you to chat with your documents using Groq's Gemma2 model. 
-Upload your documents and ask questions about their content.
+This application allows you to chat with your documents and images using advanced RAG (Retrieval-Augmented Generation) technology. 
+Upload documents, images, or mixed file types and ask questions about their content.
+
+**Supported formats:** PDF, Word, Excel, PowerPoint, Text files, Images (with OCR), and more!
 """)
 
 # Sidebar for file upload
 with st.sidebar:
-    st.header("Upload Documents")
+    # API Key status
+    st.markdown("### 🔑 API Status")
+    if api_key:
+        masked_key = api_key[:8] + "..." + api_key[-4:] if len(api_key) > 12 else api_key[:4] + "..."
+        st.success(f"✅ Connected: `{masked_key}`")
+        
+        # Option to change API key
+        if st.button("🔄 Change API Key", help="Change your Groq API key"):
+            # Clear the current API key to force re-entry
+            st.session_state.current_api_key = None
+            st.rerun()
+    else:
+        st.error("❌ No API key provided")
+    
+    st.markdown("---")
+    st.header("📁 Upload Documents & Images")
+    st.markdown("*Drag & drop or browse files*")
     uploaded_files = st.file_uploader(
         "Choose your documents",
-        type=["pdf", "docx", "txt", "csv", "json", "xml", "yml", "yaml", "xls", "xlsx", "pptx", "html"],
-        accept_multiple_files=True
+        type=["pdf", "docx", "txt", "csv", "json", "xml", "yml", "yaml", "xls", "xlsx", "pptx", "html", "md", "jpg", "jpeg", "png", "bmp", "tiff", "tif", "webp", "gif"],
+        accept_multiple_files=True,
+        help="Supported formats: Documents (PDF, Word, Excel, PowerPoint, etc.), Images (JPG, PNG, TIFF, etc.), and Text files"
     )
     
     if uploaded_files:
         if st.button("Process Documents"):
             with st.spinner("Processing documents..."):
                 try:
-                    # Save uploaded files temporarily
+                    # Save uploaded files temporarily with proper extensions
                     temp_files = []
+                    file_mapping = {}  # Map temp files to original names
+                    
                     for uploaded_file in uploaded_files:
-                        temp_file = tempfile.NamedTemporaryFile(delete=False)
+                        # Get file extension from original filename
+                        file_extension = os.path.splitext(uploaded_file.name)[1]
+                        
+                        # Create temp file with proper extension
+                        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension)
                         temp_file.write(uploaded_file.getvalue())
+                        temp_file.close()
+                        
                         temp_files.append(temp_file.name)
+                        file_mapping[temp_file.name] = uploaded_file.name
+                        
+                        print(f"📁 Saved {uploaded_file.name} as {temp_file.name}")
+                    
+                    # Store the mapping for better error reporting
+                    st.session_state.file_mapping = file_mapping
                     
                     # Process documents
-                    st.session_state.vector_store = st.session_state.doc_processor.process_documents(temp_files)
+                    st.session_state.document_store = st.session_state.doc_processor.process_documents(
+                        temp_files, 
+                        file_mapping
+                    )
                     st.session_state.processed_docs = True
                     
-                    # Display processed files
-                    st.success("Documents processed successfully!")
-                    st.markdown("### Processed Documents:")
-                    for file in uploaded_files:
-                        st.markdown(f"- {file.name}")
+                    # Display processed files with file type info
+                    metadata = st.session_state.document_store['metadata']
+                    
+                    if metadata['processing_errors']:
+                        st.warning(f"⚠️ Some files could not be processed ({len(metadata['processing_errors'])} errors)")
+                        with st.expander("� View Processing Details"):
+                            for error in metadata['processing_errors']:
+                                st.text(f"❌ {error}")
+                    
+                    if metadata['total_files'] > 0:
+                        st.success(f"✅ Successfully processed {metadata['total_files']} files!")
+                        
+                        st.markdown("### 📊 Processing Summary:")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Total Files", metadata['total_files'])
+                        with col2:
+                            st.metric("Total Chunks", metadata['total_chunks'])
+                        with col3:
+                            st.metric("File Types", len(metadata['file_types']))
+                        
+                        st.markdown("### 📄 Processed Files:")
+                        for file_name, file_type in metadata['file_types'].items():
+                            if 'Image' in file_type:
+                                st.markdown(f"🖼️ **{file_name}** - {file_type} (OCR processed)")
+                            else:
+                                st.markdown(f"📄 **{file_name}** - {file_type}")
+                    else:
+                        st.error("❌ No files could be processed successfully")
                     
                     # Clean up temporary files
                     for temp_file in temp_files:
@@ -134,12 +189,18 @@ with st.sidebar:
     
     # Download Q&A PDF
     if st.session_state.qa_history:
-        if st.button("Download Q&A PDF"):
-            with st.spinner("Generating PDF..."):
+        if st.button("📄 Download Q&A PDF", help="Download your complete Q&A session as a PDF"):
+            with st.spinner("📝 Generating PDF..."):
                 try:
                     # Create a temporary file for the PDF
                     temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-                    pdf_path = st.session_state.doc_processor.generate_qa_pdf(temp_pdf.name)
+                    temp_pdf.close()
+                    
+                    # Generate PDF with the session history
+                    pdf_path = st.session_state.doc_processor.generate_qa_pdf(
+                        temp_pdf.name, 
+                        st.session_state.qa_history
+                    )
                     
                     # Read the PDF file
                     with open(pdf_path, 'rb') as pdf_file:
@@ -147,28 +208,37 @@ with st.sidebar:
                     
                     # Create download button
                     st.download_button(
-                        label="Click to Download PDF",
+                        label="💾 Click to Download PDF",
                         data=pdf_data,
-                        file_name=f"qa_session_{st.session_state.session_id}.pdf",
-                        mime="application/pdf"
+                        file_name=f"InsightDocs_QA_Session_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                        mime="application/pdf",
+                        help="Your complete Q&A session in PDF format"
                     )
                     
-                    # Clean up temporary file after a short delay
-                    st.session_state['pdf_to_delete'] = pdf_path
+                    st.success("✅ PDF generated successfully!")
+                    
+                    # Clean up temporary file
+                    try:
+                        os.unlink(pdf_path)
+                    except:
+                        pass
+                        
                 except Exception as e:
-                    st.error(f"Error generating PDF: {str(e)}")
-                finally:
-                    # Clean up the temporary file in the next run
-                    if 'pdf_to_delete' in st.session_state:
-                        try:
-                            os.unlink(st.session_state['pdf_to_delete'])
-                            del st.session_state['pdf_to_delete']
-                        except:
-                            pass
+                    st.error(f"❌ Error generating PDF: {str(e)}")
+    else:
+        st.info("💡 Ask some questions first to generate a Q&A PDF report")
 
 # Main chat interface
 if not st.session_state.processed_docs:
-    st.warning("Please upload and process your documents first.")
+    st.info("👆 Please upload and process your documents first.")
+    st.markdown("""
+    ### 🎯 What you can do:
+    - Upload **multiple file types** at once
+    - Ask questions about **text documents** (PDF, Word, Excel, etc.)
+    - Extract text from **images** using OCR technology
+    - Get **source references** for every answer
+    - Download your **Q&A session** as a PDF
+    """)
 else:
     # Create a container for the chat history
     chat_container = st.container()
@@ -187,10 +257,21 @@ else:
         submit_button = st.form_submit_button("Ask Question")
         
         if submit_button and user_question:
-            with st.spinner("Generating answer..."):
-                # Get answer from the model
-                qa_chain = st.session_state.doc_processor.create_qa_chain(st.session_state.vector_store)
-                answer = qa_chain.invoke({"query": user_question})['result']
+            with st.spinner("🔍 Searching through your documents..."):
+                # Get answer from the enhanced QA chain
+                qa_chain = st.session_state.doc_processor.create_qa_chain(st.session_state.document_store)
+                result = qa_chain.invoke({"query": user_question})
+                answer = result['result']
+                
+                # Display source information if available
+                if 'source_documents' in result and result['source_documents']:
+                    with st.expander("📚 Source Documents Used"):
+                        for i, doc in enumerate(result['source_documents'][:3]):  # Show top 3 sources
+                            source = doc.metadata.get('source', 'Unknown')
+                            content_type = doc.metadata.get('content_type', 'Unknown')
+                            chunk_id = doc.metadata.get('chunk_id', 'N/A')
+                            st.markdown(f"**Source {i+1}:** {source} ({content_type}) - Chunk {chunk_id}")
+                            st.markdown(f"*Preview:* {doc.page_content[:200]}...")
                 
                 # Add to history
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -209,4 +290,4 @@ else:
 
 # Footer
 st.markdown("---")
-st.markdown("Powered by Groq's Gemma2 model") 
+st.markdown("🚀 **InsightDocs** - Powered by Groq's Gemma2 model | Enhanced RAG with OCR & Multi-format Support") 
