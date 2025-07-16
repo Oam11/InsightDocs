@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from langchain_groq import ChatGroq
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS, Chroma
+from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever

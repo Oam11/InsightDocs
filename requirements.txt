@@ -1,33 +1,34 @@
+# Core application
 streamlit
 langchain
 langchain-groq
 langchain-huggingface
+langchain_community
 groq
+
+# Vector search and embeddings
 faiss-cpu
 sentence-transformers
+rank_bm25
+
+# Document processing
 PyPDF2
+pdfplumber
 python-docx
 pandas
-python-magic
-tiktoken
 openpyxl
 python-pptx
-reportlab
-langchain_community
 xlrd
-# Image processing dependencies
+
+# Image processing (OCR)
 Pillow
 easyocr
 pytesseract
 opencv-python
-# Enhanced RAG dependencies
-chromadb
-rank_bm25
-# Better text processing
-spacy
+
+# Text processing
+tiktoken
 nltk
-# Document parsing improvements
-pdfplumber
-pymupdf
-# Async support
-aiofiles
+
+# PDF generation
+reportlab
