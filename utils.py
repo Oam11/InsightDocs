@@ -38,14 +38,21 @@ from io import BytesIO
 import hashlib
 
 # Image processing imports
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFilter
+import numpy as np
+
+# Handle EasyOCR with system compatibility
 try:
     import easyocr
     EASYOCR_AVAILABLE = True
 except ImportError:
     EASYOCR_AVAILABLE = False
     print("Warning: EasyOCR not available. Using Tesseract only for OCR.")
+except Exception as e:
+    EASYOCR_AVAILABLE = False
+    print(f"Warning: EasyOCR initialization failed: {e}. Using Tesseract only for OCR.")
 
+# Handle Tesseract
 try:
     import pytesseract
     PYTESSERACT_AVAILABLE = True
@@ -53,14 +60,16 @@ except ImportError:
     PYTESSERACT_AVAILABLE = False
     print("Warning: Pytesseract not available. OCR functionality will be limited.")
 
+# Handle OpenCV with fallback
 try:
     import cv2
-    import numpy as np
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    import numpy as np
-    print("Warning: OpenCV not available. Using basic image processing only.")
+    print("Warning: OpenCV not available. Using PIL-based image processing.")
+except Exception as e:
+    CV2_AVAILABLE = False
+    print(f"Warning: OpenCV failed to load: {e}. Using PIL-based image processing.")
 
 # Enhanced text processing
 import nltk
@@ -85,20 +94,39 @@ class EnhancedDocumentProcessor:
             language="python", chunk_size=800, chunk_overlap=100
         )
         
-        # Initialize OCR readers
+        # Initialize OCR readers with better error handling
         self.easyocr_reader = None
-        if EASYOCR_AVAILABLE:
+        self.easyocr_available = EASYOCR_AVAILABLE
+        
+        if self.easyocr_available:
             try:
-                self.easyocr_reader = easyocr.Reader(['en'], gpu=False)
+                # Initialize EasyOCR with CPU-only mode for cloud compatibility
+                self.easyocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+                print("✅ EasyOCR initialized successfully")
             except Exception as e:
-                print(f"Warning: Failed to initialize EasyOCR: {e}")
+                print(f"❌ Failed to initialize EasyOCR: {e}")
+                self.easyocr_available = False
                 self.easyocr_reader = None
             
+        # Store availability flags as instance variables
+        self.pytesseract_available = PYTESSERACT_AVAILABLE
+        self.cv2_available = CV2_AVAILABLE
+        
         # Configure Tesseract for better performance (if available)
-        if PYTESSERACT_AVAILABLE:
-            self.tesseract_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,;:!?()[]{}"-'
+        if self.pytesseract_available:
+            # Enhanced Tesseract configuration for better accuracy
+            self.tesseract_config = r'--oem 3 --psm 6'
+            # Try different PSM modes for different image types
+            self.tesseract_configs = {
+                'default': r'--oem 3 --psm 6',
+                'single_column': r'--oem 3 --psm 4',
+                'single_block': r'--oem 3 --psm 8',
+                'single_line': r'--oem 3 --psm 7',
+                'single_word': r'--oem 3 --psm 8'
+            }
         else:
             self.tesseract_config = None
+            self.tesseract_configs = {}
             
         # Document storage with metadata
         self.documents: List[Document] = []
@@ -595,130 +623,343 @@ Troubleshooting Tips:
             input_variables=["context", "question"]
         )
     
+    def preprocess_image_pil(self, image_path: str) -> Image.Image:
+        """Preprocess image using PIL for better OCR accuracy when OpenCV is not available."""
+        try:
+            # Open and convert to RGB if needed
+            img = Image.open(image_path)
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            # Convert to grayscale
+            if img.mode != 'L':
+                img = img.convert('L')
+            
+            # Enhance contrast
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(2.0)
+            
+            # Enhance sharpness
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(2.0)
+            
+            # Apply filters for noise reduction
+            img = img.filter(ImageFilter.MedianFilter(size=3))
+            
+            # Resize if too small (helps with OCR)
+            width, height = img.size
+            if width < 300 or height < 300:
+                scale_factor = max(300/width, 300/height)
+                new_size = (int(width * scale_factor), int(height * scale_factor))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+            
+            return img
+        except Exception as e:
+            print(f"PIL preprocessing failed: {e}")
+            return Image.open(image_path)
+
     def preprocess_image(self, image_path: str) -> np.ndarray:
-        """Preprocess image for better OCR accuracy."""
-        if not CV2_AVAILABLE:
-            # Fallback to basic PIL processing
-            pil_img = Image.open(image_path)
-            # Convert to grayscale and return as numpy array
-            gray_img = pil_img.convert('L')
-            return np.array(gray_img)
+        """Preprocess image for better OCR accuracy with fallback options."""
+        if not self.cv2_available:
+            # Use PIL-based preprocessing
+            try:
+                pil_img = self.preprocess_image_pil(image_path)
+                return np.array(pil_img)
+            except Exception as e:
+                print(f"PIL preprocessing failed: {e}")
+                # Final fallback - just convert to grayscale
+                pil_img = Image.open(image_path).convert('L')
+                return np.array(pil_img)
         
-        # Read image with OpenCV
-        img = cv2.imread(image_path)
-        if img is None:
-            # Try with PIL if OpenCV fails
-            pil_img = Image.open(image_path)
-            img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-        
-        # Convert to grayscale
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # Apply denoising
-        denoised = cv2.fastNlMeansDenoising(gray)
-        
-        # Apply adaptive thresholding
-        thresh = cv2.adaptiveThreshold(
-            denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-        )
-        
-        # Morphological operations to clean up
-        kernel = np.ones((1, 1), np.uint8)
-        cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-        
-        return cleaned
+        try:
+            # Read image with OpenCV
+            img = cv2.imread(image_path)
+            if img is None:
+                # Try with PIL if OpenCV fails
+                pil_img = Image.open(image_path)
+                img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+            
+            # Convert to grayscale
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
+            # Apply denoising
+            denoised = cv2.fastNlMeansDenoising(gray)
+            
+            # Apply adaptive thresholding
+            thresh = cv2.adaptiveThreshold(
+                denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+            )
+            
+            # Morphological operations to clean up
+            kernel = np.ones((1, 1), np.uint8)
+            cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+            
+            return cleaned
+        except Exception as e:
+            print(f"OpenCV preprocessing failed: {e}, falling back to PIL")
+            # Fallback to PIL processing
+            return self.preprocess_image_pil(image_path)
     
     def extract_text_from_image(self, image_path: str) -> str:
-        """Extract text from image using available OCR methods."""
+        """Extract text from image using multiple OCR methods for maximum accuracy."""
+        print(f"🔍 Analyzing image: {os.path.basename(image_path)}")
         extracted_texts = []
         
         # Method 1: EasyOCR (if available)
-        if EASYOCR_AVAILABLE and self.easyocr_reader:
+        if self.easyocr_available and self.easyocr_reader:
             try:
-                results = self.easyocr_reader.readtext(image_path)
-                easyocr_text = " ".join([result[1] for result in results if result[2] > 0.5])
-                if easyocr_text.strip():
-                    extracted_texts.append(("EasyOCR", easyocr_text))
-            except Exception as e:
-                print(f"EasyOCR failed: {e}")
-        
-        # Method 2: Tesseract with preprocessing (if available)
-        if PYTESSERACT_AVAILABLE and CV2_AVAILABLE:
-            try:
-                # Preprocess image
-                processed_img = self.preprocess_image(image_path)
+                print("📖 Running EasyOCR analysis...")
+                results = self.easyocr_reader.readtext(image_path, detail=1)
+                easyocr_text = []
+                confidence_scores = []
                 
-                # Convert back to PIL format for Tesseract
-                pil_img = Image.fromarray(processed_img)
+                for (bbox, text, confidence) in results:
+                    if confidence > 0.3:  # Lower threshold for more text
+                        easyocr_text.append(text)
+                        confidence_scores.append(confidence)
                 
-                # Extract text with Tesseract
-                tesseract_text = pytesseract.image_to_string(pil_img, config=self.tesseract_config)
-                if tesseract_text.strip():
-                    extracted_texts.append(("Tesseract_Processed", tesseract_text))
+                if easyocr_text:
+                    combined_text = " ".join(easyocr_text)
+                    avg_confidence = sum(confidence_scores) / len(confidence_scores)
+                    extracted_texts.append(("EasyOCR", combined_text, avg_confidence))
+                    print(f"✅ EasyOCR extracted {len(easyocr_text)} text segments (avg confidence: {avg_confidence:.2f})")
+                else:
+                    print("⚠️ EasyOCR found no confident text")
+                    
             except Exception as e:
-                print(f"Tesseract with preprocessing failed: {e}")
+                print(f"❌ EasyOCR failed: {e}")
         
-        # Method 3: Tesseract on original image (fallback)
-        if PYTESSERACT_AVAILABLE:
-            try:
-                original_text = pytesseract.image_to_string(Image.open(image_path))
-                if original_text.strip():
-                    extracted_texts.append(("Tesseract_Original", original_text))
-            except Exception as e:
-                print(f"Tesseract on original failed: {e}")
+        # Method 2: Tesseract with multiple configurations (if available)
+        if self.pytesseract_available:
+            for config_name, config in self.tesseract_configs.items():
+                try:
+                    print(f"📖 Running Tesseract with {config_name} configuration...")
+                    
+                    # Try with preprocessed image
+                    if self.cv2_available or True:  # Always try preprocessing
+                        try:
+                            processed_img = self.preprocess_image(image_path)
+                            if isinstance(processed_img, np.ndarray):
+                                pil_img = Image.fromarray(processed_img)
+                            else:
+                                pil_img = processed_img
+                            
+                            tesseract_text = pytesseract.image_to_string(pil_img, config=config).strip()
+                            if tesseract_text and len(tesseract_text) > 3:
+                                # Get confidence score
+                                try:
+                                    data = pytesseract.image_to_data(pil_img, config=config, output_type=pytesseract.Output.DICT)
+                                    confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
+                                    avg_conf = sum(confidences) / len(confidences) / 100 if confidences else 0.5
+                                except:
+                                    avg_conf = 0.6  # Default confidence
+                                
+                                extracted_texts.append((f"Tesseract_{config_name}_processed", tesseract_text, avg_conf))
+                                print(f"✅ Tesseract {config_name} (processed) extracted text (confidence: {avg_conf:.2f})")
+                        except Exception as e:
+                            print(f"⚠️ Tesseract {config_name} with preprocessing failed: {e}")
+                    
+                    # Try with original image as fallback
+                    try:
+                        original_text = pytesseract.image_to_string(Image.open(image_path), config=config).strip()
+                        if original_text and len(original_text) > 3:
+                            # Simple confidence estimation based on text length and character variety
+                            char_variety = len(set(original_text.lower())) / len(original_text) if original_text else 0
+                            length_score = min(len(original_text) / 100, 1.0)
+                            confidence = (char_variety + length_score) / 2
+                            
+                            extracted_texts.append((f"Tesseract_{config_name}_original", original_text, confidence))
+                            print(f"✅ Tesseract {config_name} (original) extracted text (estimated confidence: {confidence:.2f})")
+                    except Exception as e:
+                        print(f"⚠️ Tesseract {config_name} on original failed: {e}")
+                        
+                except Exception as e:
+                    print(f"❌ Tesseract {config_name} configuration failed: {e}")
         
-        # Combine results and choose the best one
+        # Combine and rank results
         if not extracted_texts:
-            return "No text could be extracted from this image. OCR libraries may not be available."
+            return "❌ No text could be extracted from this image. The image may not contain readable text, or OCR libraries may not be properly configured."
         
-        # Return the longest text as it's likely more complete
-        best_text = max(extracted_texts, key=lambda x: len(x[1]))
-        return best_text[1]
+        # Sort by confidence and length (prefer longer, more confident text)
+        ranked_texts = sorted(extracted_texts, key=lambda x: (x[2], len(x[1])), reverse=True)
+        
+        # Get the best result
+        best_method, best_text, best_confidence = ranked_texts[0]
+        
+        # If we have multiple good results, combine unique parts
+        if len(ranked_texts) > 1:
+            print(f"🔄 Combining results from {len(ranked_texts)} OCR methods...")
+            
+            # Use the best text as base, but add unique content from others
+            combined_text = best_text
+            unique_additions = []
+            
+            for method, text, confidence in ranked_texts[1:]:
+                if confidence > 0.4:  # Only consider confident alternatives
+                    # Find text that's not in the best result
+                    words_in_best = set(best_text.lower().split())
+                    words_in_current = set(text.lower().split())
+                    unique_words = words_in_current - words_in_best
+                    
+                    if len(unique_words) > 2:  # If there are significant unique words
+                        unique_additions.append(f"\n[Additional text from {method}]: {text}")
+            
+            if unique_additions:
+                combined_text += "\n" + "\n".join(unique_additions)
+                best_text = combined_text
+        
+        print(f"🎯 Best OCR result from {best_method} (confidence: {best_confidence:.2f})")
+        print(f"📝 Extracted {len(best_text.split())} words")
+        
+        return best_text
     
     def analyze_image_metadata(self, image_path: str) -> Dict[str, Any]:
-        """Extract metadata from image."""
+        """Extract comprehensive metadata from image."""
         try:
             with Image.open(image_path) as img:
                 metadata = {
+                    'filename': os.path.basename(image_path),
                     'format': img.format,
                     'mode': img.mode,
                     'size': img.size,
-                    'filename': os.path.basename(image_path)
+                    'width': img.width,
+                    'height': img.height,
+                    'file_size': os.path.getsize(image_path)
                 }
                 
+                # Calculate image characteristics
+                metadata['aspect_ratio'] = round(img.width / img.height, 2)
+                metadata['megapixels'] = round((img.width * img.height) / 1000000, 2)
+                
+                # Analyze image complexity (helps determine OCR approach)
+                if img.mode in ('RGB', 'RGBA'):
+                    # Convert to grayscale to analyze contrast
+                    gray_img = img.convert('L')
+                    img_array = np.array(gray_img)
+                    metadata['mean_brightness'] = round(np.mean(img_array), 2)
+                    metadata['contrast_std'] = round(np.std(img_array), 2)
+                    
+                    # Estimate text likelihood based on contrast
+                    if metadata['contrast_std'] > 50:
+                        metadata['text_likelihood'] = 'High'
+                    elif metadata['contrast_std'] > 25:
+                        metadata['text_likelihood'] = 'Medium'
+                    else:
+                        metadata['text_likelihood'] = 'Low'
+                
                 # Extract EXIF data if available
-                if hasattr(img, '_getexif') and img._getexif():
-                    metadata['exif'] = img._getexif()
+                try:
+                    exif_data = img._getexif()
+                    if exif_data:
+                        metadata['has_exif'] = True
+                        # Extract useful EXIF tags
+                        useful_tags = {
+                            'DateTime': 306,
+                            'Software': 305,
+                            'ImageDescription': 270,
+                            'Make': 271,
+                            'Model': 272
+                        }
+                        
+                        for tag_name, tag_id in useful_tags.items():
+                            if tag_id in exif_data:
+                                metadata[f'exif_{tag_name.lower()}'] = str(exif_data[tag_id])
+                    else:
+                        metadata['has_exif'] = False
+                except:
+                    metadata['has_exif'] = False
                 
                 return metadata
-        except Exception:
-            return {'filename': os.path.basename(image_path)}
-    
+        except Exception as e:
+            return {
+                'filename': os.path.basename(image_path),
+                'error': f"Could not analyze image metadata: {str(e)}"
+            }
+
     def _read_image(self, file_path: str) -> str:
-        """Process image file and extract text content."""
+        """Process image file and extract comprehensive text content."""
+        print(f"🖼️ Processing image: {os.path.basename(file_path)}")
+        
         try:
-            # Extract text using OCR
-            text_content = self.extract_text_from_image(file_path)
-            
             # Get image metadata
             metadata = self.analyze_image_metadata(file_path)
             
-            # Create formatted content
-            content = f"""Image Analysis Report
-Filename: {metadata.get('filename', 'Unknown')}
-Format: {metadata.get('format', 'Unknown')}
-Size: {metadata.get('size', 'Unknown')}
-Mode: {metadata.get('mode', 'Unknown')}
+            # Extract text using enhanced OCR
+            text_content = self.extract_text_from_image(file_path)
+            
+            # Determine content quality score
+            word_count = len(text_content.split()) if text_content else 0
+            quality_indicators = []
+            
+            if word_count > 50:
+                quality_indicators.append("Rich text content")
+            elif word_count > 10:
+                quality_indicators.append("Moderate text content")
+            elif word_count > 0:
+                quality_indicators.append("Limited text content")
+            else:
+                quality_indicators.append("No readable text detected")
+            
+            if metadata.get('text_likelihood') == 'High':
+                quality_indicators.append("High text clarity")
+            elif metadata.get('text_likelihood') == 'Medium':
+                quality_indicators.append("Medium text clarity")
+            
+            # Create comprehensive formatted content
+            content = f"""📷 IMAGE ANALYSIS REPORT
+════════════════════════════════════════════════════════════════════════
 
-Extracted Text Content:
+📋 FILE INFORMATION:
+• Filename: {metadata.get('filename', 'Unknown')}
+• Format: {metadata.get('format', 'Unknown')}
+• Dimensions: {metadata.get('width', '?')} × {metadata.get('height', '?')} pixels
+• File Size: {metadata.get('file_size', 0):,} bytes
+• Color Mode: {metadata.get('mode', 'Unknown')}
+• Aspect Ratio: {metadata.get('aspect_ratio', 'Unknown')}
+• Resolution: {metadata.get('megapixels', 0)} MP
+
+📊 IMAGE CHARACTERISTICS:
+• Brightness Level: {metadata.get('mean_brightness', 'Unknown')}
+• Contrast Score: {metadata.get('contrast_std', 'Unknown')}
+• Text Detection Likelihood: {metadata.get('text_likelihood', 'Unknown')}
+• Quality Indicators: {', '.join(quality_indicators)}
+
+{f"📅 Creation Info: {metadata.get('exif_datetime', 'Not available')}" if metadata.get('exif_datetime') else ""}
+{f"📱 Device: {metadata.get('exif_make', '')} {metadata.get('exif_model', '')}".strip() if metadata.get('exif_make') else ""}
+
+════════════════════════════════════════════════════════════════════════
+📝 EXTRACTED TEXT CONTENT ({word_count} words detected):
+
 {text_content}
 
----
+════════════════════════════════════════════════════════════════════════
+🏷️ DOCUMENT TAGS: Image Document, OCR Processed, Visual Content
 """
             
+            print(f"✅ Image processing complete: {word_count} words extracted")
             return content
+            
         except Exception as e:
-            return f"Error processing image {os.path.basename(file_path)}: {str(e)}"
+            error_content = f"""❌ IMAGE PROCESSING ERROR
+════════════════════════════════════════════════════════════════════════
+
+📋 FILE INFORMATION:
+• Filename: {os.path.basename(file_path)}
+• Status: Processing Failed
+
+❌ ERROR DETAILS:
+{str(e)}
+
+🔧 TROUBLESHOOTING:
+• Ensure the image file is not corrupted
+• Verify the image contains readable text
+• Check if the image format is supported
+• Try converting the image to PNG or JPEG format
+
+════════════════════════════════════════════════════════════════════════
+"""
+            print(f"❌ Error processing image: {str(e)}")
+            return error_content
 
 # Backward compatibility alias
 DocumentProcessor = EnhancedDocumentProcessor
