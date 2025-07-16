@@ -179,26 +179,10 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Model Selection
+    # Model Configuration (Fixed to Llama 3.3 70B)
     st.header("🤖 Model Configuration")
-    model_options = {
-        "Llama 3.3 70B (Recommended)": "llama-3.3-70b-versatile",
-        "Llama 3.1 70B": "llama-3.1-70b-versatile", 
-        "Llama 3.1 8B": "llama-3.1-8b-instant",
-        "Llama 3.2 90B": "llama-3.2-90b-text-preview",
-        "Llama 3.2 11B": "llama-3.2-11b-text-preview",
-        "Llama 3.2 3B": "llama-3.2-3b-preview",
-        "Llama 3.2 1B": "llama-3.2-1b-preview"
-    }
-    
-    selected_model_name = st.selectbox(
-        "Choose AI Model:",
-        options=list(model_options.keys()),
-        index=0,
-        help="Select the language model for document analysis. Larger models generally provide better responses but may be slower."
-    )
-    
-    selected_model = model_options[selected_model_name]
+    selected_model = "llama-3.3-70b-versatile"
+    st.info("🦙 **Using Llama 3.3 70B Versatile** - The most capable model for document analysis")
     
     st.markdown("---")
     st.header("📁 Upload Documents & Images")
