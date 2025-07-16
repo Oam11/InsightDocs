@@ -39,10 +39,28 @@ import hashlib
 
 # Image processing imports
 from PIL import Image, ImageEnhance
-import easyocr
-import pytesseract
-import cv2
-import numpy as np
+try:
+    import easyocr
+    EASYOCR_AVAILABLE = True
+except ImportError:
+    EASYOCR_AVAILABLE = False
+    print("Warning: EasyOCR not available. Using Tesseract only for OCR.")
+
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+    print("Warning: Pytesseract not available. OCR functionality will be limited.")
+
+try:
+    import cv2
+    import numpy as np
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    import numpy as np
+    print("Warning: OpenCV not available. Using basic image processing only.")
 
 # Enhanced text processing
 import nltk
@@ -68,13 +86,19 @@ class EnhancedDocumentProcessor:
         )
         
         # Initialize OCR readers
-        try:
-            self.easyocr_reader = easyocr.Reader(['en'], gpu=False)
-        except Exception:
-            self.easyocr_reader = None
+        self.easyocr_reader = None
+        if EASYOCR_AVAILABLE:
+            try:
+                self.easyocr_reader = easyocr.Reader(['en'], gpu=False)
+            except Exception as e:
+                print(f"Warning: Failed to initialize EasyOCR: {e}")
+                self.easyocr_reader = None
             
-        # Configure Tesseract for better performance
-        self.tesseract_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,;:!?()[]{}"-'
+        # Configure Tesseract for better performance (if available)
+        if PYTESSERACT_AVAILABLE:
+            self.tesseract_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,;:!?()[]{}"-'
+        else:
+            self.tesseract_config = None
             
         # Document storage with metadata
         self.documents: List[Document] = []
@@ -573,7 +597,14 @@ Troubleshooting Tips:
     
     def preprocess_image(self, image_path: str) -> np.ndarray:
         """Preprocess image for better OCR accuracy."""
-        # Read image
+        if not CV2_AVAILABLE:
+            # Fallback to basic PIL processing
+            pil_img = Image.open(image_path)
+            # Convert to grayscale and return as numpy array
+            gray_img = pil_img.convert('L')
+            return np.array(gray_img)
+        
+        # Read image with OpenCV
         img = cv2.imread(image_path)
         if img is None:
             # Try with PIL if OpenCV fails
@@ -598,11 +629,11 @@ Troubleshooting Tips:
         return cleaned
     
     def extract_text_from_image(self, image_path: str) -> str:
-        """Extract text from image using multiple OCR methods."""
+        """Extract text from image using available OCR methods."""
         extracted_texts = []
         
         # Method 1: EasyOCR (if available)
-        if self.easyocr_reader:
+        if EASYOCR_AVAILABLE and self.easyocr_reader:
             try:
                 results = self.easyocr_reader.readtext(image_path)
                 easyocr_text = " ".join([result[1] for result in results if result[2] > 0.5])
@@ -611,32 +642,34 @@ Troubleshooting Tips:
             except Exception as e:
                 print(f"EasyOCR failed: {e}")
         
-        # Method 2: Tesseract with preprocessing
-        try:
-            # Preprocess image
-            processed_img = self.preprocess_image(image_path)
-            
-            # Convert back to PIL format for Tesseract
-            pil_img = Image.fromarray(processed_img)
-            
-            # Extract text with Tesseract
-            tesseract_text = pytesseract.image_to_string(pil_img, config=self.tesseract_config)
-            if tesseract_text.strip():
-                extracted_texts.append(("Tesseract", tesseract_text))
-        except Exception as e:
-            print(f"Tesseract failed: {e}")
+        # Method 2: Tesseract with preprocessing (if available)
+        if PYTESSERACT_AVAILABLE and CV2_AVAILABLE:
+            try:
+                # Preprocess image
+                processed_img = self.preprocess_image(image_path)
+                
+                # Convert back to PIL format for Tesseract
+                pil_img = Image.fromarray(processed_img)
+                
+                # Extract text with Tesseract
+                tesseract_text = pytesseract.image_to_string(pil_img, config=self.tesseract_config)
+                if tesseract_text.strip():
+                    extracted_texts.append(("Tesseract_Processed", tesseract_text))
+            except Exception as e:
+                print(f"Tesseract with preprocessing failed: {e}")
         
         # Method 3: Tesseract on original image (fallback)
-        try:
-            original_text = pytesseract.image_to_string(Image.open(image_path))
-            if original_text.strip():
-                extracted_texts.append(("Tesseract_Original", original_text))
-        except Exception as e:
-            print(f"Tesseract on original failed: {e}")
+        if PYTESSERACT_AVAILABLE:
+            try:
+                original_text = pytesseract.image_to_string(Image.open(image_path))
+                if original_text.strip():
+                    extracted_texts.append(("Tesseract_Original", original_text))
+            except Exception as e:
+                print(f"Tesseract on original failed: {e}")
         
         # Combine results and choose the best one
         if not extracted_texts:
-            return ""
+            return "No text could be extracted from this image. OCR libraries may not be available."
         
         # Return the longest text as it's likely more complete
         best_text = max(extracted_texts, key=lambda x: len(x[1]))

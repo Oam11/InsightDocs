@@ -22,9 +22,7 @@ xlrd
 
 # Image processing (OCR)
 Pillow
-easyocr
 pytesseract
-opencv-python
 
 # Text processing
 tiktoken
