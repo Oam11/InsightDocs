@@ -6,7 +6,8 @@ A powerful Retrieval-Augmented Generation (RAG) application that processes multi
 
 ### 🔑 **Zero Configuration Setup**
 - **No Config Files Required**: Enter your API key directly in the web interface
-- **Session-Based Security**: API key stored securely only for your session
+- **Local Storage**: API key is saved locally so you only enter it once
+- **Session-Based Security**: Option to use session-only storage for enhanced privacy
 - **Instant Setup**: Get running in under 2 minutes
 
 ### 📄 **Comprehensive Document Support**
@@ -64,6 +65,8 @@ streamlit run app.py
 5. **Open your browser** and go to `http://localhost:8501`
 
 6. **Enter your Groq API key** when prompted (get one free at [console.groq.com](https://console.groq.com))
+   - Check "Remember this key" to store it locally for future use
+   - Your API key will be saved in `~/.insightdocs/config.json` for convenience
 
 That's it! No configuration files needed.
 

@@ -5,39 +5,112 @@ import tempfile
 import uuid
 from datetime import datetime
 
-# Get API key from user input only
+import streamlit as st
+import os
+from utils import DocumentProcessor
+import tempfile
+import uuid
+from datetime import datetime
+import json
+import hashlib
+
+# Constants for local storage
+CONFIG_DIR = os.path.expanduser("~/.insightdocs")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+def ensure_config_dir():
+    """Ensure the config directory exists."""
+    if not os.path.exists(CONFIG_DIR):
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+
+def save_api_key(api_key: str):
+    """Save API key to local config file."""
+    try:
+        ensure_config_dir()
+        config = {
+            "api_key": api_key,
+            "saved_date": datetime.now().isoformat()
+        }
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f)
+        return True
+    except Exception as e:
+        print(f"Error saving API key: {e}")
+        return False
+
+def load_api_key():
+    """Load API key from local config file."""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                return config.get("api_key", "")
+        return ""
+    except Exception as e:
+        print(f"Error loading API key: {e}")
+        return ""
+
+def clear_stored_api_key():
+    """Clear the stored API key."""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            os.remove(CONFIG_FILE)
+        return True
+    except Exception as e:
+        print(f"Error clearing API key: {e}")
+        return False
+
+# Get API key from stored config or user input
+stored_api_key = load_api_key()
 api_key = None
 
-st.markdown("### 🔑 Enter Your Groq API Key")
-st.info("Get your free API key at [console.groq.com](https://console.groq.com)")
+# Try to use stored API key first
+if stored_api_key and stored_api_key.startswith("gsk_"):
+    api_key = stored_api_key
+    show_api_input = False
+else:
+    show_api_input = True
 
-api_key = st.text_input(
-    "Groq API Key:",
-    type="password",
-    placeholder="Enter your Groq API key (starts with 'gsk_')",
-    help="Your API key is stored only for this session and is not saved anywhere.",
-    key="api_key_input"
-)
-
-if not api_key:
-    st.warning("⚠️ Please enter your Groq API key to continue.")
-    st.markdown("""
-    **How to get your API key:**
-    1. Go to [console.groq.com](https://console.groq.com)
-    2. Sign up for a free account
-    3. Generate an API key
-    4. Copy and paste it above
-    """)
-    st.stop()
-
-# Validate API key format
-if not api_key.startswith("gsk_"):
-    st.error("""
-    ❌ Invalid Groq API key format. The API key should start with 'gsk_'.
+# If no valid stored key, ask user for input
+if show_api_input:
+    st.markdown("### 🔑 API Key Setup")
+    st.info("Please enter your Groq API key. You can get one free at [console.groq.com](https://console.groq.com)")
     
-    Please check your API key and make sure you're using the correct key from [console.groq.com](https://console.groq.com)
-    """)
-    st.stop()
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        user_api_key = st.text_input(
+            "Groq API Key:",
+            type="password",
+            placeholder="Enter your Groq API key (starts with 'gsk_')",
+            help="Your API key will be stored locally for convenience.",
+            key="api_key_input"
+        )
+    
+    with col2:
+        save_key = st.checkbox("💾 Remember", value=True, help="Save API key locally so you don't have to enter it again")
+    
+    if user_api_key:
+        if user_api_key.startswith("gsk_"):
+            api_key = user_api_key
+            if save_key:
+                if save_api_key(api_key):
+                    st.success("✅ API key saved locally!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Could not save API key locally, but will use for this session")
+        else:
+            st.error("❌ Invalid Groq API key format. The API key should start with 'gsk_'")
+            st.stop()
+    else:
+        st.warning("⚠️ Please enter your Groq API key to continue.")
+        st.markdown("""
+        **How to get your API key:**
+        1. Go to [console.groq.com](https://console.groq.com)
+        2. Sign up for a free account
+        3. Generate an API key
+        4. Copy and paste it above
+        """)
+        st.stop()
 
 # Initialize session state
 if 'session_id' not in st.session_state:
@@ -83,13 +156,25 @@ with st.sidebar:
     st.markdown("### 🔑 API Status")
     if api_key:
         masked_key = api_key[:8] + "..." + api_key[-4:] if len(api_key) > 12 else api_key[:4] + "..."
-        st.success(f"✅ Connected: `{masked_key}`")
+        if stored_api_key:
+            st.success(f"✅ Stored Locally: `{masked_key}`")
+        else:
+            st.info(f"🔒 Session Only: `{masked_key}`")
         
-        # Option to change API key
-        if st.button("🔄 Change API Key", help="Change your Groq API key"):
-            # Clear the current API key to force re-entry
-            st.session_state.current_api_key = None
-            st.rerun()
+        # API Key management options
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Change Key", help="Enter a new API key"):
+                clear_stored_api_key()
+                st.rerun()
+        
+        with col2:
+            if stored_api_key and st.button("🗑️ Clear Stored", help="Remove saved API key"):
+                if clear_stored_api_key():
+                    st.success("✅ Stored API key cleared!")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to clear stored key")
     else:
         st.error("❌ No API key provided")
     
