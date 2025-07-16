@@ -565,7 +565,7 @@ Troubleshooting Tips:
         """Create an enhanced question-answering chain using ensemble retrieval."""
         llm = ChatGroq(
             groq_api_key=self.api_key,
-            model_name="gemma2-9b-it",
+            model_name="meta-llama/llama-guard-4-12b",
             temperature=0.3,  # Lower temperature for more focused answers
             max_tokens=4096
         )

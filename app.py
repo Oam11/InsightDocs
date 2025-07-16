@@ -377,4 +377,4 @@ else:
 
 # Footer
 st.markdown("---")
-st.markdown("🚀 **InsightDocs** - Powered by Groq's Gemma2 model | Enhanced RAG with OCR & Multi-format Support") 
+st.markdown("🚀 **InsightDocs** - Enhanced RAG with OCR & Multi-format Support") 
