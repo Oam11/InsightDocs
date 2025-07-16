@@ -160,7 +160,6 @@ This usually happens when files can't be read properly:
 
 ### **Core Components**
 - **Frontend**: Streamlit with enhanced UI/UX
-- **LLM**: Groq's Gemma2-9B-IT (ultra-fast inference)
 - **Embeddings**: SentenceTransformers all-MiniLM-L6-v2 (CPU optimized)
 - **Vector Store**: FAISS for semantic search
 - **Keyword Search**: BM25 for exact term matching
@@ -342,7 +341,6 @@ streamlit run app.py
 
 **Core Components:**
 - **Frontend**: Streamlit with enhanced UI/UX
-- **LLM**: Groq's Gemma2-9B-IT model (fast inference)
 - **Embeddings**: SentenceTransformers all-MiniLM-L6-v2 (CPU optimized)
 - **Vector Store**: FAISS for semantic search
 - **Keyword Search**: BM25Okapi for exact matching
