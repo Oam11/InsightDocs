@@ -109,6 +109,8 @@ if show_api_input:
         2. Sign up for a free account
         3. Generate an API key
         4. Copy and paste it above
+        5. Click "Remember" to save it for future sessions
+        6. The api key is stored locally on your machine
         """)
         st.stop()
 
