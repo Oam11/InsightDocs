@@ -19,7 +19,6 @@ pandas
 openpyxl
 python-pptx
 xlrd
-fitz
 
 # Image processing (OCR)
 Pillow

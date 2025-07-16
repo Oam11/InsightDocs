@@ -10,7 +10,6 @@ from langchain.retrievers import EnsembleRetriever
 from langchain.schema import Document
 import PyPDF2
 import pdfplumber
-import fitz  # PyMuPDF
 from docx import Document as DocxDocument
 import pandas as pd
 try:
