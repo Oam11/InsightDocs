@@ -4,14 +4,8 @@ from langchain_groq import ChatGroq
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-# RetrievalQA import path changed across LangChain versions; try multiple locations
-try:
-    from langchain.chains.retrieval_qa.base import RetrievalQA  # LangChain >=0.2.11
-except ModuleNotFoundError:  # pragma: no cover
-    try:
-        from langchain.chains.retrieval_qa import RetrievalQA  # Some mid-range releases
-    except ModuleNotFoundError:  # pragma: no cover
-        from langchain.chains import RetrievalQA  # Legacy path
+# RetrievalQA import for LangChain 0.2.x
+from langchain_chains.retrieval_qa.base import RetrievalQA
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from langchain.schema import Document
