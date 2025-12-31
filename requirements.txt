@@ -1,17 +1,16 @@
 # Core application
 streamlit
-langchain==0.2.16
+langchain
 langchain-groq
-langchain-huggingface==1.2.0
-langchain_community==0.2.16
-langchain-text-splitters==0.2.4
+langchain-huggingface
+langchain_community
+langchain-text-splitters
 groq
 
-# Binary wheels 
-numpy==1.26.4
+numpy
 
 # Vector search and embeddings
-faiss-cpu==1.13.2
+faiss-cpu
 sentence-transformers
 rank_bm25
 
