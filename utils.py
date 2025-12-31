@@ -607,7 +607,8 @@ Troubleshooting Tips:
     
     def _create_custom_prompt(self):
         """Create a custom prompt template for better responses."""
-        from langchain.prompts import PromptTemplate
+        from langchain_core.prompts import PromptTemplate
+
         
         template = """Use the following pieces of context to answer the question at the end. 
         The context may include text from various document types including PDFs, Word documents, spreadsheets, presentations, images with OCR text, and other file formats.
