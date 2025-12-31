@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from utils import EnhancedDocumentProcessor
+from utils import *
 import tempfile
 import uuid
 from datetime import datetime
