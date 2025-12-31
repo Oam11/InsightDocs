@@ -4,6 +4,7 @@ langchain
 langchain-groq
 langchain-huggingface
 langchain_community
+langchain-text-splitters
 groq
 
 # Vector search and embeddings
