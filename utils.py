@@ -4,11 +4,12 @@ from langchain_groq import ChatGroq
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-# RetrievalQA import for LangChain 0.2.x
-from langchain_chains.retrieval_qa.base import RetrievalQA
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from langchain.schema import Document
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
+from langchain_core.prompts import PromptTemplate
 import PyPDF2
 import pdfplumber
 from docx import Document as DocxDocument
@@ -566,7 +567,7 @@ Troubleshooting Tips:
         }
         return content_types.get(file_extension, 'Unknown Type')
     
-    def create_qa_chain(self, document_store: Dict[str, Any]) -> RetrievalQA:
+    def create_qa_chain(self, document_store: Dict[str, Any]):
         """Create an enhanced question-answering chain using ensemble retrieval."""
         llm = ChatGroq(
             groq_api_key=self.api_key,
@@ -594,23 +595,17 @@ Troubleshooting Tips:
             weights=[0.6, 0.4]  # Favor semantic search slightly
         )
         
-        # Create QA chain with custom prompt
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            chain_type="stuff",
-            retriever=ensemble_retriever,
-            return_source_documents=True,
-            chain_type_kwargs={
-                "prompt": self._create_custom_prompt()
-            }
-        )
+        # Create custom prompt
+        prompt = self._create_custom_prompt()
+        
+        # Create the document chain and retrieval chain
+        combine_docs_chain = create_stuff_documents_chain(llm, prompt)
+        qa_chain = create_retrieval_chain(ensemble_retriever, combine_docs_chain)
+        
         return qa_chain
     
     def _create_custom_prompt(self):
         """Create a custom prompt template for better responses."""
-        from langchain_core.prompts import PromptTemplate
-
-        
         template = """Use the following pieces of context to answer the question at the end. 
         The context may include text from various document types including PDFs, Word documents, spreadsheets, presentations, images with OCR text, and other file formats.
         
@@ -620,13 +615,13 @@ Troubleshooting Tips:
         Context:
         {context}
         
-        Question: {question}
+        Question: {input}
         
         Helpful Answer:"""
         
         return PromptTemplate(
             template=template,
-            input_variables=["context", "question"]
+            input_variables=["context", "input"]
         )
     
     def preprocess_image_pil(self, image_path: str) -> Image.Image:

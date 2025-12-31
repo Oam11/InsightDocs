@@ -5,7 +5,6 @@ langchain-groq
 langchain-huggingface
 langchain_community
 langchain-text-splitters
-langchain-chains
 groq
 
 numpy

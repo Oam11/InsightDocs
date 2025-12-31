@@ -378,13 +378,13 @@ else:
             with st.spinner("🔍 Searching through your documents..."):
                 # Get answer from the enhanced QA chain
                 qa_chain = st.session_state.doc_processor.create_qa_chain(st.session_state.document_store)
-                result = qa_chain.invoke({"query": user_question})
-                answer = result['result']
+                result = qa_chain.invoke({"input": user_question})
+                answer = result['answer']
                 
                 # Display source information if available
-                if 'source_documents' in result and result['source_documents']:
+                if 'context' in result and result['context']:
                     with st.expander("📚 Source Documents Used"):
-                        for i, doc in enumerate(result['source_documents'][:3]):  # Show top 3 sources
+                        for i, doc in enumerate(result['context'][:3]):  # Show top 3 sources
                             source = doc.metadata.get('source', 'Unknown')
                             content_type = doc.metadata.get('content_type', 'Unknown')
                             chunk_id = doc.metadata.get('chunk_id', 'N/A')
